@@ -185,14 +185,17 @@ with st.expander("Knowledge Sources", expanded=True):
             "Web Pages",
             placeholder="https://example.com\nhttps://another.com",
             height=108,
-            label_visibility="visible"
+            label_visibility="visible",
+            key="url_input_box"
         )
+        index_urls_clicked = st.button("Index URLs")
 
     with col_pdf:
         uploaded_pdf = st.file_uploader(
             "PDF Document",
             type=["pdf"],
-            accept_multiple_files=False
+            accept_multiple_files=False,
+            key="pdf_uploader"
         )
 
     # Model selector — small, tucked below sources
@@ -200,13 +203,18 @@ with st.expander("Knowledge Sources", expanded=True):
     with mcol1:
         st.markdown('<div class="cf-label">Model</div>', unsafe_allow_html=True)
         selected_model = st.selectbox("Model", ["llama3.2"], index=0, label_visibility="collapsed")
-        st.session_state.model = OllamaLLM(model=selected_model, streaming=True)
+        if (
+            "model_name" not in st.session_state
+            or st.session_state.model_name != selected_model
+        ):
+            st.session_state.model = OllamaLLM(model=selected_model, streaming=True)
+            st.session_state.model_name = selected_model
 
     st.divider()
 
 
 # ─────────────────────────────────────────────
-# PDF LOADING
+# PDF LOADING (only on a NEW upload)
 # ─────────────────────────────────────────────
 if uploaded_pdf and uploaded_pdf.name != st.session_state.loaded_pdf:
     with st.spinner(f"Reading and embedding {uploaded_pdf.name}…"):
@@ -219,22 +227,25 @@ if uploaded_pdf and uploaded_pdf.name != st.session_state.loaded_pdf:
     st.success(f"**{uploaded_pdf.name}** indexed — ask anything about it.")
 
 # ─────────────────────────────────────────────
-# URL SCRAPING
+# URL SCRAPING (only on explicit button click)
 # ─────────────────────────────────────────────
 urls = [u.strip() for u in url_input.splitlines() if u.strip()]
 
-if urls and urls != st.session_state.scraped_urls:
-    with st.spinner(f"Scraping and embedding {len(urls)} page(s)…"):
-        all_documents = []
-        for url in urls:
-            st.toast(f"Indexing {url}", icon="🔗")
-            all_documents.extend(load_page(url))
-        chunked_docs = split_text(all_documents)
-        index_docs(chunked_docs)
-        st.session_state.scraped_urls = urls
-        st.session_state.loaded_pdf = ""
-        st.session_state.chat_history = []
-    st.success(f"**{len(urls)} page(s)** indexed — ask anything about them.")
+if index_urls_clicked:
+    if not urls:
+        st.warning("Please enter at least one URL.")
+    else:
+        with st.spinner(f"Scraping and embedding {len(urls)} page(s)…"):
+            all_documents = []
+            for url in urls:
+                st.toast(f"Indexing {url}", icon="🔗")
+                all_documents.extend(load_page(url))
+            chunked_docs = split_text(all_documents)
+            index_docs(chunked_docs)
+            st.session_state.scraped_urls = urls
+            st.session_state.loaded_pdf = ""
+            st.session_state.chat_history = []
+        st.success(f"**{len(urls)} page(s)** indexed — ask anything about them.")
 
 # ─────────────────────────────────────────────
 # CHAT HISTORY
